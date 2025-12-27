@@ -6,7 +6,6 @@ import asyncio
 import threading
 import tkinter as tk  
 from tkinter import filedialog, messagebox
-import customtkinter as ctk 
 from pathlib import Path
 from dataclasses import dataclass, field
 from typing import Optional, List, Dict, Any
@@ -15,17 +14,86 @@ import time
 import subprocess
 import glob
 import random
-import requests
 import base64
 import shutil
 import sys
 import concurrent.futures
 from urllib.parse import quote
 
+# =============================================================================
+# PORTABLE BUILD SUPPORT
+# Thiết lập đường dẫn cho thư viện khi chạy từ exe (Nuitka/PyInstaller)
+# Các thư viện nặng có thể được đặt trong thư mục 'libs' bên cạnh exe
+# =============================================================================
+
+def _setup_portable_paths():
+    """
+    Thiết lập đường dẫn sys.path để hỗ trợ chế độ portable.
+    Thư viện nặng (torch, neucodec, llama_cpp, etc.) có thể nằm trong:
+    - Thư mục 'libs' cùng cấp với file exe
+    - Hoặc Python environment của hệ thống
+    """
+    # Detect if running from compiled executable (Nuitka or PyInstaller)
+    is_frozen = getattr(sys, 'frozen', False)  # PyInstaller
+    is_nuitka = '__compiled__' in globals()  # Nuitka
+    
+    if is_frozen or is_nuitka:
+        # Đang chạy từ exe (Nuitka hoặc PyInstaller)
+        exe_dir = os.path.dirname(sys.executable)
+    else:
+        # Đang chạy từ script Python
+        exe_dir = os.path.dirname(os.path.abspath(__file__))
+    
+    # Thư mục libs (chứa thư viện nặng)
+    libs_dir = os.path.join(exe_dir, "libs")
+    if os.path.isdir(libs_dir):
+        # Thêm libs vào đầu sys.path
+        if libs_dir not in sys.path:
+            sys.path.insert(0, libs_dir)
+        
+        # Thêm các thư mục con trong libs
+        for item in os.listdir(libs_dir):
+            item_path = os.path.join(libs_dir, item)
+            if os.path.isdir(item_path) and item_path not in sys.path:
+                sys.path.insert(0, item_path)
+        
+        print(f"[INFO] Portable mode: libs loaded from {libs_dir}")
+    
+    # Thêm thư mục exe vào sys.path (cho edge, VieNeu-TTS, etc.)
+    if exe_dir not in sys.path:
+        sys.path.insert(0, exe_dir)
+    
+    return exe_dir
+
+# Thiết lập đường dẫn portable
+_app_exe_dir = _setup_portable_paths()
+
 # Add edge module path
 _edge_module_path = os.path.dirname(os.path.abspath(__file__))
 if _edge_module_path not in sys.path:
     sys.path.insert(0, _edge_module_path)
+
+# Import các thư viện có thể thiếu (optional imports)
+HAS_REQUESTS = False
+try:
+    import requests
+    HAS_REQUESTS = True
+except ImportError:
+    print("[WARNING] requests not found - Capcut/Edge TTS features may not work")
+    # Create a dummy module to prevent AttributeError
+    class DummyRequests:
+        """Dummy requests module when actual requests is not available"""
+        @staticmethod
+        def get(*args, **kwargs):
+            raise ImportError("requests module is not installed. Install with: pip install requests")
+        @staticmethod
+        def post(*args, **kwargs):
+            raise ImportError("requests module is not installed. Install with: pip install requests")
+        class RequestException(Exception):
+            pass
+    requests = DummyRequests()
+
+import customtkinter as ctk
 
 # Import authentication module
 from auth_module import AuthManager, require_login

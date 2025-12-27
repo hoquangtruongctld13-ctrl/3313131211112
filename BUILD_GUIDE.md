@@ -2,6 +2,8 @@
 
 Tài liệu này hướng dẫn chi tiết cách build file .exe từ mã nguồn, bao gồm việc tự động lấy tất cả thư viện cần thiết, đặc biệt là VieNeu-TTS - một thư viện Text-to-Speech tiếng Việt.
 
+> 📌 **TIP: Xem thêm [NUITKA_BUILD_GUIDE.md](NUITKA_BUILD_GUIDE.md) để build nhanh với Nuitka - chỉ compile code Python, không bundle thư viện nặng!**
+
 ## Mục Lục
 
 1. [Tổng Quan](#1-tổng-quan)
@@ -9,7 +11,7 @@ Tài liệu này hướng dẫn chi tiết cách build file .exe từ mã nguồ
 3. [Cài Đặt llama-cpp-python cho CPU](#3-cài-đặt-llama-cpp-python-cho-cpu)
 4. [Cài Đặt VieNeu-TTS](#4-cài-đặt-vieneu-tts)
 5. [Build EXE với PyInstaller](#5-build-exe-với-pyinstaller)
-6. [Build EXE với Nuitka](#6-build-exe-với-nuitka)
+6. [Build EXE với Nuitka (NHANH)](#6-build-exe-với-nuitka)
 7. [Cấu Trúc Thư Mục Output](#7-cấu-trúc-thư-mục-output)
 8. [Khắc Phục Sự Cố](#8-khắc-phục-sự-cố)
 
@@ -411,45 +413,73 @@ dist/
 
 ---
 
-## 6. Build EXE với Nuitka
+## 6. Build EXE với Nuitka (NHANH)
 
-Nuitka tạo exe tối ưu hơn PyInstaller nhưng build lâu hơn.
+> 📌 **KHUYẾN NGHỊ: Xem hướng dẫn chi tiết tại [NUITKA_BUILD_GUIDE.md](NUITKA_BUILD_GUIDE.md)**
 
-### 6.1 Cài Đặt Nuitka
+Nuitka compile Python thành C - chạy nhanh hơn và có thể build mà **KHÔNG bundle thư viện nặng** vào exe.
 
+### 6.1 Build Nhanh (Không bundle thư viện nặng)
+
+**Ưu điểm:**
+- Build chỉ **2-10 phút** (thay vì 30-60 phút)
+- File exe nhỏ gọn (~50-100MB)
+- Dễ update thư viện sau này
+
+**Cách sử dụng:**
 ```bash
-pip install nuitka
-pip install ordered-set zstandard  # Dependencies
+# Sử dụng menu build
+build_menu.bat
+
+# Hoặc trực tiếp
+build_nuitka_fast.bat
 ```
 
-### 6.2 Build Command
+### 6.2 Build Portable (Có bundle thư viện)
+
+**Ưu điểm:**
+- Copy được sang máy khác dễ dàng
+- Không cần cài Python trên máy đích
+
+**Cách sử dụng:**
+```bash
+build_nuitka_portable.bat
+```
+
+### 6.3 Command Nuitka (Không bundle thư viện nặng)
 
 ```bash
 python -m nuitka ^
     --standalone ^
-    --onefile ^
     --enable-plugin=tk-inter ^
-    --enable-plugin=numpy ^
-    --include-package=vieneu_tts ^
-    --include-package=utils ^
+    --follow-imports ^
+    --nofollow-import-to=torch ^
+    --nofollow-import-to=torchaudio ^
+    --nofollow-import-to=neucodec ^
+    --nofollow-import-to=llama_cpp ^
+    --nofollow-import-to=phonemizer ^
+    --nofollow-import-to=librosa ^
+    --nofollow-import-to=scipy ^
+    --nofollow-import-to=numpy ^
+    --nofollow-import-to=soundfile ^
+    --nofollow-import-to=onnxruntime ^
+    --nofollow-import-to=transformers ^
+    --nofollow-import-to=google ^
     --include-package=edge ^
-    --include-package=llama_cpp ^
-    --include-package=phonemizer ^
-    --include-package=neucodec ^
-    --include-package=torch ^
-    --include-package=torchaudio ^
-    --include-package=customtkinter ^
-    --include-data-dir=VieNeu-TTS=VieNeu-TTS ^
     --include-data-dir=edge=edge ^
-    --include-data-files=icon.ico=icon.ico ^
-    --windows-disable-console ^
     --windows-icon-from-ico=icon.ico ^
-    --output-dir=dist ^
-    --output-filename=FathTTS.exe ^
+    --windows-console-mode=disable ^
+    --output-dir=dist_nuitka ^
     main.py
 ```
 
-### 6.3 Nuitka Multi-file Build (Khuyến nghị)
+**Giải thích `--nofollow-import-to`:**
+- Không bundle thư viện được chỉ định vào exe
+- Thư viện sẽ được load từ:
+  1. Thư mục `libs/` bên cạnh file exe
+  2. Hoặc từ Python environment của hệ thống
+
+### 6.4 Legacy: Build đầy đủ (bundle tất cả)
 
 ```bash
 python -m nuitka ^
@@ -462,7 +492,7 @@ python -m nuitka ^
     --include-data-dir=VieNeu-TTS/sample=VieNeu-TTS/sample ^
     --include-data-dir=VieNeu-TTS/utils=VieNeu-TTS/utils ^
     --include-data-files=VieNeu-TTS/config.yaml=VieNeu-TTS/config.yaml ^
-    --windows-disable-console ^
+    --windows-console-mode=disable ^
     --windows-icon-from-ico=icon.ico ^
     --output-dir=dist ^
     main.py
